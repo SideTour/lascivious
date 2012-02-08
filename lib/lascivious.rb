@@ -31,19 +31,44 @@ module Lascivious
   # Flash for all kiss metrics
   def kiss_metrics_flash
     messages = flash[:kiss_metrics]
+
+    returnarr = "";
+
     unless messages.blank? || messages.empty?
-      return messages.map do |type_hash|
+      messages.map do |type_hash|
         type_hash.map do |e|
-          %Q{_kmq.push(['#{e.first.to_s}', '#{e.last.to_s}']);}
+          if not (e.first.to_s == "props" || e.first.to_s == "record")
+            returnarr = returnarr + %Q{_kmq.push(['#{e.first.to_s}', '#{e.last.to_s}']);}
+          end
         end
       end.flatten.join("\n")
     end
-    return nil
+    
+    logger.info "LASCIVIOUS INFO: " + messages.to_s  
+    unless messages.blank? || messages.empty?
+      messages.each do |mhash|
+        if mhash.first[0] == :record
+          recordstr = ""
+          mhash.each do |msg|
+            if msg.first == :record
+              recordstr = %Q{'#{msg.first.to_s}', '#{msg.last.to_s}'}
+            end
+            if msg.first == "props"
+              opts = msg.last.to_s.gsub("=>", ":").gsub("\"","'")
+              logger.info %Q{_kmq.push([#{recordstr}, #{opts}]);} 
+              returnarr = returnarr + %Q{_kmq.push([#{recordstr}, #{opts}]);} 
+            end
+          end
+        end     
+      end
+    end
+  
+    return returnarr
   end
 
   # Trigger an event at Kiss (specific: message of event_type 'record', e.g. User Signed Up)
-  def kiss_record(value)
-    kiss_metric :record, value
+  def kiss_record(value, properties="")
+    kiss_metric :record, value, properties
   end
   
   # Set values (e.g. country: uk)
@@ -62,9 +87,9 @@ module Lascivious
   end
 
   # 
-  def kiss_metric(event_type, value)
+  def kiss_metric(event_type, value, properties = "")
     flash[:kiss_metrics] ||= []
-    flash[:kiss_metrics] << { event_type => value }
+    flash[:kiss_metrics] << { event_type => value, 'props' => properties }
   end
   
   # Get kiss metrics key
